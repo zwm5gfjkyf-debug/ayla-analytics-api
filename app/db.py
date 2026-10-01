@@ -9,7 +9,10 @@ from app.config import settings
 
 def normalize_database_url(url: str) -> str:
     if url.startswith("postgres://"):
-        return "postgresql://" + url[len("postgres://") :]
+        url = "postgresql://" + url[len("postgres://") :]
+    scheme, sep, rest = url.partition("://")
+    if sep and scheme in {"postgresql", "postgres"}:
+        return f"postgresql+psycopg2://{rest}"
     return url
 
 
