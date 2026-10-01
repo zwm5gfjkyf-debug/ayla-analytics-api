@@ -90,6 +90,7 @@ async def _upsert_indoor_days(
             workers = _pad24(breakdown.get("workers"))
             groups = groups_by_date.get(raw_date)
             for hour in range(24):
+                # Conversion denominator: guests only (male + female). Workers excluded.
                 visitors = male[hour] + female[hour]
                 values: dict[str, Any] = {
                     "shop_id": shop_id,
@@ -325,10 +326,7 @@ async def growth_payload(report_date: date, shop_id: str) -> dict[str, Any]:
                 "groups": hourly_groups.get(cursor, 0),
                 "transactions": day_transactions,
                 "net_sales": round(day_net_sales, 2),
-                "conversion_pct": conversion_pct(
-                    day_transactions,
-                    hourly_groups.get(cursor, 0),
-                ),
+                "conversion_pct": conversion_pct(day_transactions, visitors),
             }
         )
         cursor += timedelta(days=1)
@@ -338,7 +336,7 @@ async def growth_payload(report_date: date, shop_id: str) -> dict[str, Any]:
     male = sum(row["male"] for row in hours)
     female = sum(row["female"] for row in hours)
     workers = sum(row["workers"] for row in hours)
-    conversion = conversion_pct(transactions, groups)
+    conversion = conversion_pct(transactions, visitors)
     busy_hours = [row for row in hours if row["visitors"] > 0]
     avg_visitors = (sum(row["visitors"] for row in busy_hours) / len(busy_hours)) if busy_hours else 0
     avg_conversion = (
@@ -432,7 +430,7 @@ async def _load_hours(session: AsyncSession, shop_id: str, report_date: date) ->
                 "workers": workers,
                 "transactions": transactions,
                 "net_sales": round(net_sales, 2),
-                "conversion_pct": conversion_pct(transactions, groups),
+                "conversion_pct": conversion_pct(transactions, visitors),
             }
         )
     return hours

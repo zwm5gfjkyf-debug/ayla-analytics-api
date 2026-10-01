@@ -7,10 +7,10 @@ from app.db import Base
 
 
 class TrafficManualDaily(Base):
-    """Daily group totals per shop (Vitrac «Jami guruhlar»).
+    """Daily guest headcount per shop (male + female, workers excluded).
 
-    Manual fallback for conversion when hourly groups have not been
-    synced yet. Conversion never uses indoor headcount.
+    Manual fallback for conversion when hourly Vitrac rows have not been
+    synced yet. visitor_count is individual people, not group count.
     """
 
     __tablename__ = "traffic_manual_daily"
@@ -26,7 +26,11 @@ class TrafficManualDaily(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     shop_id: Mapped[str] = mapped_column(String(64), nullable=False)
     report_date: Mapped[date] = mapped_column(Date, nullable=False)
-    visitor_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    visitor_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        comment="Individual guests: male + female, workers excluded. Not group count.",
+    )
     fetched_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

@@ -17,7 +17,11 @@ router = APIRouter(prefix="/traffic", tags=["traffic"])
 class ManualTrafficEntry(BaseModel):
     shop_id: str = Field(..., min_length=1)
     date: date
-    visitor_count: int = Field(..., ge=0)
+    visitor_count: int = Field(
+        ...,
+        ge=0,
+        description="Individual guest headcount (male + female, workers excluded).",
+    )
 
 
 class ConversionRow(BaseModel):

@@ -11,46 +11,30 @@ from app.models.traffic_hourly import TrafficHourly
 from app.models.traffic_manual import TrafficManualDaily
 
 
-def conversion_pct(transactions_count: int, group_count: int) -> float | None:
-    """transactions ÷ groups × 100.
+def conversion_pct(transactions_count: int, visitor_count: int) -> float | None:
+    """transactions ÷ visitor_count × 100.
 
-    Groups (Vitrac «Jami guruhlar») are the conversion opportunity:
-    a family of 5 making one purchase is one group, not five visitors.
+    visitor_count is individual guest headcount (male + female, workers
+    excluded) — not Vitrac groups.
     """
-    if group_count <= 0:
+    if visitor_count <= 0:
         return None
-    return round(100.0 * transactions_count / group_count, 2)
+    return round(100.0 * transactions_count / visitor_count, 2)
 
 
 async def get_daily_visitor_counts(
     session: AsyncSession,
     shop_id: str,
 ) -> dict[date, int]:
-    """Daily customer headcount per shop (male + female, not groups)."""
-    hourly = await session.execute(
-        select(
-            TrafficHourly.report_date,
-            func.coalesce(func.sum(TrafficHourly.visitor_count), 0),
-        )
-        .where(TrafficHourly.shop_id == shop_id)
-        .group_by(TrafficHourly.report_date)
-    )
-    return {row[0]: int(row[1] or 0) for row in hourly.all() if int(row[1] or 0) > 0}
+    """Daily guest headcount per shop (male + female, workers excluded).
 
-
-async def get_daily_group_counts(
-    session: AsyncSession,
-    shop_id: str,
-) -> dict[date, int]:
-    """Daily conversion opportunities per shop.
-
-    Prefer Vitrac indoor groups hourly sums. Fall back to manual daily
-    entry (originally Jami guruhlar). Never use indoor headcount.
+    Prefer summed TrafficHourly.visitor_count. Fall back to manual daily
+    entry of the same headcount.
     """
     hourly = await session.execute(
         select(
             TrafficHourly.report_date,
-            func.coalesce(func.sum(TrafficHourly.group_count), 0),
+            func.coalesce(func.sum(TrafficHourly.visitor_count), 0),
         )
         .where(TrafficHourly.shop_id == shop_id)
         .group_by(TrafficHourly.report_date)
@@ -67,33 +51,50 @@ async def get_daily_group_counts(
     return counts
 
 
+async def get_daily_group_counts(
+    session: AsyncSession,
+    shop_id: str,
+) -> dict[date, int]:
+    """Daily Vitrac group totals per shop. Not used for conversion."""
+    hourly = await session.execute(
+        select(
+            TrafficHourly.report_date,
+            func.coalesce(func.sum(TrafficHourly.group_count), 0),
+        )
+        .where(TrafficHourly.shop_id == shop_id)
+        .group_by(TrafficHourly.report_date)
+    )
+    return {row[0]: int(row[1] or 0) for row in hourly.all() if int(row[1] or 0) > 0}
+
+
 async def conversion_series(
     session: AsyncSession,
     shop_id: str,
 ) -> list[dict[str, Any]]:
-    groups = await get_daily_group_counts(session, shop_id)
-    if not groups:
+    visitors = await get_daily_visitor_counts(session, shop_id)
+    if not visitors:
         return []
+    groups = await get_daily_group_counts(session, shop_id)
 
     sales = await session.execute(
         select(SalesReportDaily.report_date, SalesReportDaily.transactions_count).where(
             SalesReportDaily.shop_id == shop_id,
-            SalesReportDaily.report_date.in_(groups.keys()),
+            SalesReportDaily.report_date.in_(visitors.keys()),
         ).order_by(SalesReportDaily.report_date)
     )
 
     rows: list[dict[str, Any]] = []
     for report_date, transactions_count in sales.all():
-        group_count = groups.get(report_date)
-        if group_count is None:
+        visitor_count = visitors.get(report_date)
+        if visitor_count is None:
             continue
         rows.append(
             {
                 "date": report_date.isoformat(),
-                "visitor_count": group_count,
-                "group_count": group_count,
+                "visitor_count": visitor_count,
+                "group_count": groups.get(report_date, 0),
                 "transactions_count": int(transactions_count or 0),
-                "conversion_pct": conversion_pct(int(transactions_count or 0), group_count),
+                "conversion_pct": conversion_pct(int(transactions_count or 0), visitor_count),
             }
         )
     return rows

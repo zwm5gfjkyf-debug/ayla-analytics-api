@@ -9,9 +9,10 @@ from app.db import Base
 class TrafficHourly(Base):
     """Hourly indoor traffic per shop, from Vitrac (Tassvision).
 
-    visitor_count is customer headcount (male + female). group_count is
-    Vitrac «Jami guruhlar» — a family of 5 is one group. Conversion uses
-    groups, not headcount. Workers are stored separately.
+    visitor_count is individual guest headcount: hourlyBreakdown.male +
+    hourlyBreakdown.female from Vitrac /v1/indoor/hourly. Workers are
+    excluded from visitor_count and stored in worker_count. Conversion
+    uses visitor_count (people), not group_count (Vitrac «Jami guruhlar»).
     """
 
     __tablename__ = "traffic_hourly"
@@ -31,7 +32,11 @@ class TrafficHourly(Base):
     shop_id: Mapped[str] = mapped_column(String(64), nullable=False)
     report_date: Mapped[date] = mapped_column(Date, nullable=False)
     hour: Mapped[int] = mapped_column(Integer, nullable=False)
-    visitor_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    visitor_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        comment="Individual guests: male + female from Vitrac indoor hourly; workers excluded.",
+    )
     group_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     male_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     female_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
